@@ -132,6 +132,32 @@ def test_excluded_title_rejected():
     assert reason == "title excluded"
 
 
+def test_underscore_joined_title_still_rejected():
+    # Real case from a live pull: a scraped title like
+    # "IN_Senior Associate_Guidewire ClaimCenterDev_Guidewire_Advisory_Bangalore"
+    # slipped past TITLE_REJECT because "_" counts as a word character, so
+    # "\bsenior\b" never found a boundary next to "IN_Senior".
+    j = job("IN_Senior Associate_SomeRole_Company_Advisory_Bangalore", "PwC India", GOOD_JD)
+    reason = hard_filter(j, MAX_HOURS, NO_EXTRA_EXCLUDES)
+    assert reason == "title excluded"
+
+
+def test_automotive_android_rejected_despite_no_exact_mobile_phrasing():
+    # Real case: an embedded Android Automotive (AAOS/AOSP) posting used
+    # "Android Automotive OS" / "AAOS" / "AOSP" throughout, never the exact
+    # "native android" / "android development" phrases JD_REJECT checked for.
+    jd = (
+        GOOD_JD
+        + "\n\nDesign and integrate Apple CarPlay functionality within Android Automotive "
+        "OS-based infotainment systems (AAOS). Strong experience in AOSP development, "
+        "Binder/AIDL IPC, and Android Automotive platform debugging required."
+    )
+    j = job("Software Engineer - CarPlay", "HARMAN India", jd)
+    reason = hard_filter(j, MAX_HOURS, NO_EXTRA_EXCLUDES)
+    assert reason is not None
+    assert "discipline" in reason
+
+
 # min_years_required: real formats observed from a live Apify pull on 2026-07-28
 # ("6-9", "3-6", "6+" all seen in the same small sample), plus absent/malformed cases.
 

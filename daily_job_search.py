@@ -132,6 +132,7 @@ LANG_REJECT = re.compile(
 # an Android role -- Android JDs name Kotlin, so LANG_ACCEPT happily passes them.
 JD_REJECT = re.compile(
     r"(jetpack compose|android sdk|androidx|android development|native android|"
+    r"android automotive|\baaos\b|\baosp\b|"
     r"swiftui|\bxcode\b|\bios development\b|react native|\bflutter\b|"
     r"mobile app development|mobile application development|"
     r"\bllm\b|prompt engineering|agentic|\brag\b|langchain|langgraph|"
@@ -175,7 +176,10 @@ def min_years_required(yoe) -> float | None:
 
 def hard_filter(job: dict, max_hours: float, exclude_companies: set) -> str | None:
     """Return a rejection reason, or None if the job survives."""
-    title = job.get("jobTitle") or ""
+    # Underscore counts as a word character in regex, so "\bsenior\b" never
+    # matches inside an underscore-joined scraped title like
+    # "IN_Senior Associate_Guidewire..." -- normalize joiners to spaces first.
+    title = re.sub(r"[_/]+", " ", job.get("jobTitle") or "")
     company = (job.get("companyName") or "").strip().lower()
     jd = job.get("jobDescription") or ""
 
