@@ -135,6 +135,28 @@ def posted_hours_ago(posted: str) -> float:
     return {"minute": n / 60, "hour": float(n), "day": n * 24.0}[unit]
 
 
+YEARS_MIN = re.compile(r"^\s*(\d+)")
+
+
+def min_years_required(yoe) -> float | None:
+    """Extract the minimum years required from the actor's yearsOfExperience
+    field: a list of dicts like [{"years": "6-9", ...}] or [{"years": "6+"}].
+    Uses the low end of a range (a "3-6" posting still accepts a 3-year
+    candidate) and the most restrictive entry if several are listed. Returns
+    None if the field is absent or unparseable.
+    """
+    if not isinstance(yoe, list):
+        return None
+    mins = []
+    for entry in yoe:
+        if not isinstance(entry, dict):
+            continue
+        m = YEARS_MIN.match(str(entry.get("years") or ""))
+        if m:
+            mins.append(float(m.group(1)))
+    return max(mins) if mins else None
+
+
 def hard_filter(job: dict, max_hours: float, exclude_companies: set) -> str | None:
     """Return a rejection reason, or None if the job survives."""
     title = job.get("jobTitle") or ""
@@ -157,9 +179,9 @@ def hard_filter(job: dict, max_hours: float, exclude_companies: set) -> str | No
     if len(hits) >= 2:
         return f"wrong discipline (description signals: {hits[0]})"
 
-    years = (job.get("yearsOfExperience") or {}).get("years")
-    if isinstance(years, (int, float)) and years > 5:
-        return f"requires {years}+ years"
+    years = min_years_required(job.get("yearsOfExperience"))
+    if years is not None and years > 5:
+        return f"requires {years:g}+ years"
     return None
 
 
@@ -187,6 +209,10 @@ def apify_input(keywords, locations, window, remote=False) -> dict:
 def collect(token: str, window: str, search_cfg: dict) -> list[dict]:
     jobs, seen = [], set()
     keywords = search_cfg["keywords"]
+    # Auth goes in a header, never the URL -- requests' own exception messages
+    # (and any naive error log) embed the full request URL, and a token in a
+    # query param would leak into stdout/run.log/CI artifacts on any failure.
+    headers = {"Authorization": f"Bearer {token}"}
     for i, p in enumerate(search_cfg["passes"]):
         name = p.get("name", f"pass-{i + 1}")
         locations = p["locations"]
@@ -195,16 +221,20 @@ def collect(token: str, window: str, search_cfg: dict) -> list[dict]:
         try:
             r = requests.post(
                 APIFY_SYNC,
-                params={"token": token, "memory": 1024, "timeout": 300},
+                params={"memory": 1024, "timeout": 300},
+                headers=headers,
                 json=apify_input(keywords, locations, window, remote),
                 timeout=420,
             )
-            r.raise_for_status()
-            batch = r.json()
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             # An unattended run has nobody to retry it. Log loudly, keep going.
-            print(f"[collect] {name} FAILED: {e}", file=sys.stderr)
+            # Never format the raw exception -- it can embed request details.
+            print(f"[collect] {name} FAILED: network error ({type(e).__name__})", file=sys.stderr)
             continue
+        if r.status_code >= 400:
+            print(f"[collect] {name} FAILED: HTTP {r.status_code} - {r.text[:300]}", file=sys.stderr)
+            continue
+        batch = r.json()
         new = 0
         for j in batch:
             jid = j.get("jobId")
@@ -255,7 +285,7 @@ def score_batch(api_key: str, system_prompt: str, batch: list[dict]) -> list[dic
                 "title": j.get("jobTitle"),
                 "company": j.get("companyName"),
                 "location": j.get("location"),
-                "years": (j.get("yearsOfExperience") or {}).get("years"),
+                "years": min_years_required(j.get("yearsOfExperience")),
                 "description": (j.get("jobDescription") or "")[:6000],
             }
         )
@@ -274,7 +304,11 @@ def score_batch(api_key: str, system_prompt: str, batch: list[dict]) -> list[dic
         },
         timeout=300,
     )
-    r.raise_for_status()
+    if r.status_code >= 400:
+        # Raise a clean message (status + body) rather than requests' generic
+        # HTTPError -- the body carries the actually useful reason (bad model
+        # id, low credit balance, etc.) that a bare exception string hides.
+        raise RuntimeError(f"HTTP {r.status_code} - {r.text[:300]}")
     text = "".join(b.get("text", "") for b in r.json()["content"] if b["type"] == "text")
     text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
     return json.loads(text)

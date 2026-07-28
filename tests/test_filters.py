@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from daily_job_search import hard_filter  # noqa: E402
+from daily_job_search import hard_filter, min_years_required  # noqa: E402
 
 MAX_HOURS = 24.0
 NO_EXTRA_EXCLUDES = set()
@@ -32,13 +32,15 @@ Location: Bengaluru, hybrid (3 days onsite).
 
 
 def job(title, company, jd, **overrides):
+    # yearsOfExperience matches the real Apify actor's shape: a list of dicts
+    # with a free-text "years" range (e.g. "6-9", "6+"), not a single number.
     base = {
         "jobTitle": title,
         "companyName": company,
         "jobDescription": jd,
         "postedTime": "3 hours ago",
         "location": "Bengaluru, India",
-        "yearsOfExperience": {"years": 3},
+        "yearsOfExperience": [{"years": "2-5", "context": "backend experience", "lang": "en"}],
     }
     base.update(overrides)
     return base
@@ -88,7 +90,7 @@ def test_overqualified_seniority_rejected():
     jd = GOOD_JD + "\n\nRequires 10+ years of professional software engineering experience."
     j = job(
         "Fullstack Java Engineer", "Acme Cloud", jd,
-        yearsOfExperience={"years": 10},
+        yearsOfExperience=[{"years": "10+", "context": "professional experience", "lang": "en"}],
     )
     reason = hard_filter(j, MAX_HOURS, NO_EXTRA_EXCLUDES)
     assert reason == "requires 10+ years"
@@ -128,3 +130,44 @@ def test_excluded_title_rejected():
     j = job("Senior Backend Engineer", "Acme Cloud", GOOD_JD)
     reason = hard_filter(j, MAX_HOURS, NO_EXTRA_EXCLUDES)
     assert reason == "title excluded"
+
+
+# min_years_required: real formats observed from a live Apify pull on 2026-07-28
+# ("6-9", "3-6", "6+" all seen in the same small sample), plus absent/malformed cases.
+
+def test_years_range_uses_low_end():
+    assert min_years_required([{"years": "3-6", "context": "...", "lang": "en"}]) == 3.0
+
+
+def test_years_high_range_rejected_on_low_end():
+    assert min_years_required([{"years": "6-9", "context": "...", "lang": "en"}]) == 6.0
+
+
+def test_years_open_ended_plus():
+    assert min_years_required([{"years": "6+", "context": "...", "lang": "en"}]) == 6.0
+
+
+def test_years_most_restrictive_entry_wins():
+    yoe = [
+        {"years": "2-4", "context": "Java", "lang": "en"},
+        {"years": "6+", "context": "distributed systems", "lang": "en"},
+    ]
+    assert min_years_required(yoe) == 6.0
+
+
+def test_years_absent_field_is_none():
+    assert min_years_required(None) is None
+
+
+def test_years_empty_list_is_none():
+    assert min_years_required([]) is None
+
+
+def test_years_unparseable_string_is_none():
+    assert min_years_required([{"years": "not specified"}]) is None
+
+
+def test_years_not_a_list_is_none():
+    # Guards against the actor ever reverting to the single-dict shape this
+    # code originally (wrongly) assumed -- should degrade gracefully, not crash.
+    assert min_years_required({"years": 3}) is None
