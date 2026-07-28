@@ -116,8 +116,11 @@ can hand off:
 
 ```bash
 export APIFY_TOKEN=...
-python daily_job_search.py --emit-survivors survivors.json
+python daily_job_search.py --emit-survivors survivors.json --window 48h
 ```
+
+(`--window`/`--config` apply here same as a normal run — this step still
+collects and hard-filters, it just stops before scoring.)
 
 Then, in a Claude Code session, ask something like:
 
@@ -141,8 +144,12 @@ Two things worth knowing, from actually running this:
 Then render the tracker (no API keys needed for this step):
 
 ```bash
-python daily_job_search.py --from-scored scored.json --out job-matches-YYYY-MM-DD.xlsx
+python daily_job_search.py --from-scored scored.json --out job-matches-YYYY-MM-DD.xlsx --tier2-bar 65
 ```
+
+(`--tier1-bar`/`--tier2-bar`/`--target-rows` apply here too — this is the
+step that actually decides what clears the bar, so it's the natural place to
+tune them if today's batch is thin.)
 
 ## Optional: automate it with GitHub Actions
 
