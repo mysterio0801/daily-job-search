@@ -1,0 +1,9 @@
+config/profile.local.yaml
+.env
+job-matches-*.xlsx
+run.log
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/

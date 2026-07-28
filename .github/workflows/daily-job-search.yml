@@ -1,0 +1,63 @@
+name: daily-job-search
+
+on:
+  schedule:
+    # 07:00 IST = 01:30 UTC, weekdays only. Edit this line for your own timezone --
+    # GitHub reads this file directly to schedule runs, it can't come from config/profile.local.yaml.
+    - cron: "30 1 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      window:
+        description: "Posting window"
+        type: choice
+        options: ["24h", "48h", "72h"]
+        default: "24h"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python daily_job_search.py \
+            --window "${{ inputs.window || '24h' }}" \
+            --out "job-matches-$(date +%F).xlsx" \
+            | tee run.log
+
+      - name: Upload tracker
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-matches-${{ github.run_number }}
+          path: |
+            job-matches-*.xlsx
+            run.log
+          retention-days: 30
+
+      # Opt-in: only runs if you set the repo variable ENABLE_EMAIL_NOTIFY=true
+      # (Settings -> Secrets and variables -> Actions -> Variables) and add the
+      # MAIL_USERNAME / MAIL_APP_PASSWORD / MAIL_TO secrets. See README for setup.
+      - name: Email the tracker
+        if: success() && vars.ENABLE_EMAIL_NOTIFY == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_APP_PASSWORD }}
+          from: Job Search Bot
+          to: ${{ secrets.MAIL_TO }}
+          subject: "Job matches — ${{ github.run_number }}"
+          body: file://run.log
+          attachments: job-matches-*.xlsx

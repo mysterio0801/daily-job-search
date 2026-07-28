@@ -1,0 +1,56 @@
+# Example profile — copy this file to profile.local.yaml and fill in your own details.
+#
+#   cp config/profile.example.yaml config/profile.local.yaml
+#
+# profile.local.yaml is gitignored: it never gets committed or pushed, so your
+# resume details, rubric tweaks, and referral contacts stay off the public repo
+# even though the code that reads them is public.
+#
+# If profile.local.yaml doesn't exist, the script falls back to this file, so
+# it runs out of the box as a working demo using the fictional persona below.
+
+profile: |
+  SDE-2, Berlin. ~3 years backend experience.
+  Core stack: Go, gRPC, Kafka, Postgres, AWS, Kubernetes, Docker, microservices.
+  B.Sc Computer Science, TU Berlin, 2019-2023.
+
+  Wants: backend / distributed systems roles.
+  Location: Berlin (onsite/hybrid) or genuinely remote-EU.
+  Company types: big tech, unicorns / late-stage, funded product startups.
+  Does NOT want: AI/LLM platform engineering roles, platform/infra/devtooling roles,
+  IT services and consulting firms.
+
+# Free-text rubric fed to the scoring model. Keep the "out of 100" framing and the
+# per-dimension weights adding to 100 — the script doesn't parse this, the LLM does.
+rubric: |
+  Score each job out of 100:
+    core_stack   (35) Go + Kafka + Postgres named in the JD
+    system_type  (25) distributed microservices, high-throughput transactional backend
+    cloud_infra  (15) AWS or GCP, Kubernetes, Docker
+    seniority    (10) 2-5 yrs / SDE-2 equivalent band
+    location     (10) Berlin onsite/hybrid, or genuinely remote-EU
+    ai_bonus     ( 5) AI/agentic tooling - bonus only, never a requirement
+
+tiers:
+  target_rows: 20   # how many rows the sheet aims for -- never inflate to hit this
+  tier1_bar: 80      # >= this score = genuine match
+  tier2_bar: 70      # >= this = worth a second look, labelled with the shortfall reason
+
+search:
+  keywords:
+    - "Software Engineer"
+    - "Backend Engineer"
+    - "Full Stack Engineer"
+  # Each pass is a separate Apify call merged and de-duplicated by jobId.
+  passes:
+    - locations: ["Berlin, Germany"]
+      remote: false
+    - locations: ["Germany"]
+      remote: true
+  # Extra company names to reject, beyond the built-in staffing-aggregator /
+  # IT-services denylist in daily_job_search.py. Lowercase, matched exactly.
+  exclude_companies: []
+
+# "company name (lowercase)": "contact note" -- shown in the tracker's Referral column.
+# Real names belong in profile.local.yaml only, never in this tracked example file.
+referrals: {}
