@@ -104,7 +104,13 @@ def ask(prompt: str, default: str = "") -> str:
 
 def collect_answers() -> dict:
     print("A few questions about what you're searching for (the resume covers your background).\n")
-    locations = ask("Onsite/hybrid location(s), comma-separated (e.g. 'Bengaluru, India')")
+    # Each location is itself "City, Country" -- a comma. Splitting answers on
+    # "," would break that apart, so multiple locations are ";"-separated
+    # instead (a single location's internal comma is left alone).
+    locations = ask(
+        "Onsite/hybrid location(s); separate multiple with ';' "
+        "(e.g. 'Bengaluru, India' or 'Bengaluru, India; Pune, India')"
+    )
     remote_scope = ask("Remote scope, e.g. 'India' or 'EU' (blank to skip a remote pass)")
     company_types = ask(
         "Company types wanted, comma-separated",
@@ -132,7 +138,7 @@ def collect_answers() -> dict:
         referrals[company.lower()] = note
 
     return {
-        "locations": [s.strip() for s in locations.split(",") if s.strip()],
+        "locations": [s.strip() for s in locations.split(";") if s.strip()],
         "remote_scope": remote_scope.strip(),
         "company_types": company_types,
         "exclude_types": exclude_types,
