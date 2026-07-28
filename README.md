@@ -21,9 +21,10 @@ cd daily-job-search
 pip install -r requirements.txt
 ```
 
-Get an [Apify](https://apify.com) API token and an
-[Anthropic](https://console.anthropic.com) API key — you'll need both either
-way.
+Get an [Apify](https://apify.com) API token — you'll need it either way. An
+`ANTHROPIC_API_KEY` is optional (see below for both the profile step and the
+scoring step) — it's only needed if you'd rather pay for API credits than use
+a Claude Code session for those parts.
 
 Then build `config/profile.local.yaml`, either:
 
@@ -39,6 +40,26 @@ Answer the prompts (locations, company types wanted/excluded, search
 keywords, referral contacts). Review the generated file afterward — especially
 the rubric weights and the "Does NOT want" line, since those drive every
 filtering decision downstream.
+
+**From your resume, without an Anthropic API key** (same idea as the scoring
+split below — uses your Claude subscription instead):
+
+```bash
+python scripts/generate_profile.py --resume /path/to/your_resume.pdf --emit-request request.json
+```
+
+Answer the same prompts, then ask Claude Code:
+
+> Read `request.json` and follow the `SYSTEM` prompt in
+> `scripts/generate_profile.py` to draft a "profile" and a "rubric" string.
+> Add those two keys to `request.json` (keep everything else in the file
+> unchanged), then tell me when it's done.
+
+Then render it (no API key needed for this step):
+
+```bash
+python scripts/generate_profile.py --from-draft request.json --out config/profile.local.yaml
+```
 
 **Or by hand:**
 
@@ -70,7 +91,18 @@ A Claude Pro/Max subscription and an `ANTHROPIC_API_KEY` are different products
 with different billing — a subscription doesn't cover raw Messages API calls
 a script makes. If you'd rather not pay separately for API credits, split the
 run in two and let Claude Code do the scoring, using whatever plan already
-grants you Claude Code access:
+grants you Claude Code access.
+
+The normal one-shot run (`python daily_job_search.py`) does collect -> filter
+-> score -> render as a single command, with nothing written to disk in
+between. Splitting it means those in-between results become real files you
+can hand off:
+
+| File | What it is | Who produces it |
+|---|---|---|
+| `survivors.json` | The postings that survived hard-filtering (title, language, discipline, company denylist) -- real job data, **no score yet** | `--emit-survivors` (script, Apify only, no Anthropic key) |
+| `scored.json` | The same list, each job now carrying `_score`/`_why`/`_caveat` | Whoever scores it -- Claude Code here, or the Anthropic API in a normal run |
+| `job-matches-*.xlsx` | The final ranked tracker | `--from-scored` (script, no API keys at all) |
 
 ```bash
 export APIFY_TOKEN=...
