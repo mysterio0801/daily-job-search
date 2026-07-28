@@ -3,17 +3,20 @@
 A daily job-match pipeline for backend/software engineers. It collects recent
 LinkedIn postings, hard-filters out the obvious mismatches (wrong discipline,
 wrong seniority, staffing aggregators), scores the survivors against *your*
-rubric with Claude, and writes a ranked, color-coded `.xlsx` tracker. Runs
-unattended on a scheduled GitHub Actions workflow.
+rubric with Claude, and writes a ranked, color-coded `.xlsx` tracker.
 
 This repo is generic — the actual person it searches for lives in a config
-file you create locally and never commit. Fork it, plug in your own profile,
-and it searches for you instead.
+file you create locally and never commit. Clone it, plug in your own profile,
+and it searches for you instead. Run it locally whenever you want a fresh
+batch — no fork, no GitHub account, nothing beyond the clone. If you also
+want it running unattended on a schedule (so it keeps going even when your
+laptop is off), there's an optional GitHub Actions setup for that further
+down — it's a separate, opt-in step, not a requirement.
 
-## Quickstart
+## Quickstart (run it locally)
 
 ```bash
-git clone <your fork URL>
+git clone <this repo's URL>
 cd daily-job-search
 pip install -r requirements.txt
 ```
@@ -61,10 +64,17 @@ python daily_job_search.py --dry-run   # collect + filter only, no API cost
 python daily_job_search.py             # full run, writes job-matches-YYYY-MM-DD.xlsx
 ```
 
-### Running on a schedule (GitHub Actions)
+## Optional: automate it with GitHub Actions
 
-Each fork's workflow is entirely independent — its own Actions runs, its own
-secrets, its own schedule. Nothing here is shared with the upstream repo.
+Everything above already works as a complete, standalone tool — run it by
+hand whenever you want a fresh batch. This section is only for the specific
+case where you also want it to keep running on a schedule without your
+machine being on. Skip it entirely if manual local runs are enough for you.
+
+It requires forking the repo (local use does not) and setting up three repo
+secrets, and each fork's workflow is then entirely independent — its own
+Actions runs, its own secrets, its own schedule, nothing shared with the
+upstream repo.
 
 1. **Fork this repo on GitHub.** Note: GitHub only allows forks of a public repo to also be public (there's no private-fork option), so treat your fork as public too — anything you `git add` in it is world-readable.
 2. **Enable Actions on your fork.** GitHub disables Actions by default on new forks — the first visit to your fork's *Actions* tab shows a banner ("I understand my workflows, go ahead and enable them") that you click once.

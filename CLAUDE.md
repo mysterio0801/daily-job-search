@@ -6,8 +6,10 @@ Project context for Claude Code. Read this before changing anything.
 
 A daily job-match pipeline. It collects LinkedIn postings from a configurable
 window, filters them, scores each job description against a rubric, and emits
-a ranked `.xlsx` tracker. Runs unattended on a scheduled GitHub Actions
-workflow.
+a ranked `.xlsx` tracker. Designed to be run locally by hand; the GitHub
+Actions workflow (`.github/workflows/daily-job-search.yml`) is an optional
+add-on for unattended scheduled runs, not a requirement — don't assume Actions
+is the primary execution path when reasoning about this codebase.
 
 This is a generic tool, not tied to one person. The specific profile it
 searches for — background, rubric weights, search keywords/locations, and
