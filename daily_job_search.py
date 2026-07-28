@@ -6,17 +6,33 @@ Collect -> hard-filter -> LLM-score -> ranked .xlsx
 
 Env vars required:
     APIFY_TOKEN         Apify API token (Settings -> Integrations -> API tokens)
-    ANTHROPIC_API_KEY   Anthropic API key
+    ANTHROPIC_API_KEY   Anthropic API key (only for the scoring step -- see below)
 
 Config:
     config/profile.local.yaml   your profile/rubric/search/referrals (gitignored)
     config/profile.example.yaml fallback demo profile, used if the above is absent
 
 Usage:
-    python daily_job_search.py                 # normal daily run
+    python daily_job_search.py                 # normal daily run (needs both API keys)
     python daily_job_search.py --window 48h    # widen the posting window
     python daily_job_search.py --dry-run       # collect + filter, skip scoring (free)
     python daily_job_search.py --config path/to/profile.yaml
+
+Scoring without an Anthropic API key (uses your Claude subscription instead):
+    A raw ANTHROPIC_API_KEY bills against the separate Developer Platform
+    credit balance, not a Claude Pro/Max subscription -- those are different
+    products. If you'd rather use a subscription you're already paying for,
+    split the run in two:
+
+        python daily_job_search.py --emit-survivors survivors.json
+        # then, in a Claude Code session, ask Claude to score survivors.json
+        # against config/profile.local.yaml's profile/rubric and write
+        # scored.json -- see README for the exact instructions and JSON shape.
+        python daily_job_search.py --from-scored scored.json --out job-matches.xlsx
+
+    Both files are the same shape: a JSON list of job dicts. --from-scored
+    just expects each one to additionally carry "_score" (int or null),
+    "_why" (str), and "_caveat" (str), same as score_all() would produce.
 """
 
 import argparse
@@ -438,18 +454,41 @@ def main() -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--config", default=None, help="path to a profile YAML file")
+    ap.add_argument(
+        "--emit-survivors", metavar="PATH",
+        help="collect + hard-filter only, write survivor jobs as JSON to PATH, then exit "
+             "(no ANTHROPIC_API_KEY needed -- score the file separately, see --from-scored)",
+    )
+    ap.add_argument(
+        "--from-scored", metavar="PATH",
+        help="skip collect/filter/score entirely; render the xlsx from an already-scored "
+             "survivors JSON at PATH (no APIFY_TOKEN or ANTHROPIC_API_KEY needed)",
+    )
     args = ap.parse_args()
 
+    cfg = load_config(args.config)
+    tiers = cfg["tiers"]
+    stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+
+    if args.from_scored:
+        with open(args.from_scored) as f:
+            scored = json.load(f)
+        out = args.out or f"job-matches-{stamp}.xlsx"
+        rows, tier1 = write_xlsx(
+            scored, out, cfg["referrals"],
+            tiers["target_rows"], tiers["tier1_bar"], tiers["tier2_bar"],
+        )
+        print(f"[done] {out}")
+        print(f"       {rows} rows written, {tier1} cleared the {tiers['tier1_bar']}% bar")
+        return 0
+
     apify_token = os.environ.get("APIFY_TOKEN")
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not apify_token:
         print("APIFY_TOKEN is not set", file=sys.stderr)
         return 1
-    if not api_key and not args.dry_run:
-        print("ANTHROPIC_API_KEY is not set", file=sys.stderr)
+    if not args.dry_run and not args.emit_survivors and not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set (or use --emit-survivors to score without one)", file=sys.stderr)
         return 1
-
-    cfg = load_config(args.config)
 
     window_map = {"24h": ("r86400", 24.0), "48h": ("r172800", 48.0), "72h": ("r259200", 72.0)}
     apify_window, max_hours = window_map[args.window]
@@ -478,11 +517,18 @@ def main() -> int:
             print(f"  {j.get('postedTime'):>16}  {j.get('companyName'):<28} {j.get('jobTitle')}")
         return 0
 
+    if args.emit_survivors:
+        with open(args.emit_survivors, "w") as f:
+            json.dump(survivors, f, indent=2)
+        print(f"\n[done] wrote {len(survivors)} survivors to {args.emit_survivors}")
+        print("       Score them (e.g. ask Claude Code -- see README), then render with:")
+        print(f"       python daily_job_search.py --from-scored <scored.json> --out job-matches-{stamp}.xlsx")
+        return 0
+
+    api_key = os.environ["ANTHROPIC_API_KEY"]
     system_prompt = build_scoring_system(cfg["profile"], cfg["rubric"])
     scored = score_all(api_key, system_prompt, survivors)
 
-    tiers = cfg["tiers"]
-    stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
     out = args.out or f"job-matches-{stamp}.xlsx"
     rows, tier1 = write_xlsx(
         scored, out, cfg["referrals"],

@@ -64,6 +64,44 @@ python daily_job_search.py --dry-run   # collect + filter only, no API cost
 python daily_job_search.py             # full run, writes job-matches-YYYY-MM-DD.xlsx
 ```
 
+## Scoring without a separate Anthropic API key
+
+A Claude Pro/Max subscription and an `ANTHROPIC_API_KEY` are different products
+with different billing — a subscription doesn't cover raw Messages API calls
+a script makes. If you'd rather not pay separately for API credits, split the
+run in two and let Claude Code do the scoring, using whatever plan already
+grants you Claude Code access:
+
+```bash
+export APIFY_TOKEN=...
+python daily_job_search.py --emit-survivors survivors.json
+```
+
+Then, in a Claude Code session, ask something like:
+
+> Score `survivors.json` against `config/profile.local.yaml`'s profile and
+> rubric, then write `scored.json` with the same list of jobs, each with
+> `_score` (int or null), `_why` (one sentence), and `_caveat` added. Follow
+> the exact instructions in `build_scoring_system()` in `daily_job_search.py`.
+
+Two things worth knowing, from actually running this:
+- **If `survivors.json` is large** (more than a handful of jobs with full
+  descriptions), Claude may not be able to read the whole file in one shot.
+  Ask it to extract compact per-job summaries first (title/company/years/JD
+  text) if it hits a size limit, score from those, then merge the `_score`/
+  `_why`/`_caveat` fields back onto the original full job records by index --
+  never onto a truncated copy, or the final tracker loses data.
+- Claude does the *decision*, not the merge — have it produce a small
+  scores-only file (`{"i": 0, "score": 83, ...}` per job) and a short script
+  merge that onto `survivors.json`, rather than asking it to hand-edit the
+  full 30-job file directly.
+
+Then render the tracker (no API keys needed for this step):
+
+```bash
+python daily_job_search.py --from-scored scored.json --out job-matches-YYYY-MM-DD.xlsx
+```
+
 ## Optional: automate it with GitHub Actions
 
 Everything above already works as a complete, standalone tool — run it by
