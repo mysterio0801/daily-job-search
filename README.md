@@ -63,16 +63,28 @@ python daily_job_search.py             # full run, writes job-matches-YYYY-MM-DD
 
 ### Running on a schedule (GitHub Actions)
 
-1. Push your fork to GitHub. Note: GitHub only allows forks of a public repo to also be public (there's no private-fork option), so treat your fork as public too — anything you `git add` in it is world-readable.
-2. Add repo secrets (Settings → Secrets and variables → Actions → Secrets): `APIFY_TOKEN`, `ANTHROPIC_API_KEY`.
-3. `config/profile.local.yaml` is gitignored and never reaches the Actions runner on its own. Push its contents as a **third secret**, `PROFILE_YAML`, so the workflow can reconstitute the file before each run:
+Each fork's workflow is entirely independent — its own Actions runs, its own
+secrets, its own schedule. Nothing here is shared with the upstream repo.
+
+1. **Fork this repo on GitHub.** Note: GitHub only allows forks of a public repo to also be public (there's no private-fork option), so treat your fork as public too — anything you `git add` in it is world-readable.
+2. **Enable Actions on your fork.** GitHub disables Actions by default on new forks — the first visit to your fork's *Actions* tab shows a banner ("I understand my workflows, go ahead and enable them") that you click once.
+3. **Add three repo secrets** (Settings → Secrets and variables → Actions → Secrets, or via `gh`):
    ```bash
+   gh secret set APIFY_TOKEN
+   gh secret set ANTHROPIC_API_KEY
    gh secret set PROFILE_YAML < config/profile.local.yaml
    ```
-   Without this secret the workflow silently falls back to the tracked example/demo profile — same behavior as running locally with no `profile.local.yaml`.
-4. The workflow runs weekdays at 07:00 IST by default — edit the `cron:` line in `.github/workflows/daily-job-search.yml` for your own timezone (GitHub reads that file directly to schedule runs; it can't be driven from `profile.local.yaml`).
-5. Trigger a manual run anytime via the Actions tab (`workflow_dispatch`) to test before waiting for the schedule.
-6. **If you ever edit `profile.local.yaml` locally** (rubric tweak, new referral), re-run the `gh secret set` command above — the secret is a snapshot, not a live link to the file.
+   `PROFILE_YAML` is the whole contents of your local `config/profile.local.yaml` — the file itself is gitignored and never reaches the Actions runner on its own, so the workflow reconstitutes it from this secret before each run. Without it, the workflow silently falls back to the tracked example/demo profile — same behavior as a local run with no `profile.local.yaml`.
+4. **Edit the schedule for your timezone.** The workflow runs weekdays at 07:00 IST by default — edit the `cron:` line in `.github/workflows/daily-job-search.yml` (GitHub reads that file directly to schedule runs; it can't be driven from `profile.local.yaml`).
+5. **Trigger it:**
+   - **Now, to test:** Actions tab → "daily-job-search" workflow → "Run workflow" button (this is the `workflow_dispatch` trigger, with a `window` choice already wired up). Use this rather than waiting for the cron to confirm secrets are set correctly.
+   - **Automatically:** the `cron:` schedule fires on its own from then on, using the secrets you just set.
+6. **Get results:** Actions tab → the finished run → its Artifacts section → download `job-matches-*.xlsx`. Or enable email delivery (below) to have it land in your inbox instead.
+7. **If you ever edit `profile.local.yaml` locally** (rubric tweak, new referral), re-run the `gh secret set PROFILE_YAML` command — the secret is a snapshot, not a live link to the file.
+
+GitHub Actions on public repos gets **unlimited free minutes** on standard
+runners — running this daily costs nothing on the GitHub side; the only real
+cost is the Apify/Anthropic API calls (see below).
 
 Optional email delivery of the tracker: set the repo variable
 `ENABLE_EMAIL_NOTIFY=true` plus secrets `MAIL_USERNAME`, `MAIL_APP_PASSWORD`
