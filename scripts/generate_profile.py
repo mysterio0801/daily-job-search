@@ -124,9 +124,9 @@ def collect_answers() -> dict:
         "Search keywords, comma-separated",
         "Software Engineer, Backend Engineer, Full Stack Engineer",
     )
-    target_rows = int(ask("Target rows in the tracker", "20") or "20")
-    tier1_bar = int(ask("Tier 1 score bar", "80") or "80")
-    tier2_bar = int(ask("Tier 2 score bar", "70") or "70")
+    # Score bar and row count aren't asked here -- they're per-run knobs on
+    # daily_job_search.py (--tier1-bar/--tier2-bar/--target-rows), tuned at
+    # the point you actually run the search, not fixed at profile creation.
 
     referrals: dict[str, str] = {}
     print("\nReferral contacts (company -> contact note). Leave company blank to stop.")
@@ -143,9 +143,6 @@ def collect_answers() -> dict:
         "company_types": company_types,
         "exclude_types": exclude_types,
         "keywords": [s.strip() for s in keywords.split(",") if s.strip()],
-        "target_rows": target_rows,
-        "tier1_bar": tier1_bar,
-        "tier2_bar": tier2_bar,
         "referrals": referrals,
     }
 
@@ -199,14 +196,12 @@ def confirm_overwrite(path: str) -> bool:
 
 
 def write_profile_yaml(out_path: str, profile: str, rubric: str, data: dict) -> None:
+    # No "tiers" block: score bar and row count are per-run flags on
+    # daily_job_search.py (--tier1-bar/--tier2-bar/--target-rows), not part
+    # of the profile. It falls back to sensible defaults (20/80/70) if unset.
     config = {
         "profile": _LiteralStr(profile.strip() + "\n"),
         "rubric": _LiteralStr(rubric.strip() + "\n"),
-        "tiers": {
-            "target_rows": data["target_rows"],
-            "tier1_bar": data["tier1_bar"],
-            "tier2_bar": data["tier2_bar"],
-        },
         "search": build_search_block(data),
         "referrals": data.get("referrals", {}),
     }

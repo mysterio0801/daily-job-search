@@ -35,10 +35,18 @@ docs/runbook.md                         Apify gotchas, cadence rationale, ToS no
 `load_config()` in `daily_job_search.py` reads `config/profile.local.yaml`,
 falling back to `config/profile.example.yaml` with a stderr notice if the
 former doesn't exist. Everything specific to one job-seeker — `profile`,
-`rubric`, `tiers` (target rows / score bars), `search` (keywords, location
-passes, extra company denylist entries), `referrals` — comes from this file
-and is threaded explicitly through `collect()`, `score_all()`, and
-`write_xlsx()` rather than living as module-level constants.
+`rubric`, `search` (keywords, location passes, extra company denylist
+entries), `referrals` — comes from this file and is threaded explicitly
+through `collect()`, `score_all()`, and `write_xlsx()` rather than living as
+module-level constants.
+
+`tiers` (target rows / score bars) is deliberately *not* asked for at
+profile-generation time (`scripts/generate_profile.py`) or required in the
+profile file — it's a per-run concern, exposed as `--target-rows`/
+`--tier1-bar`/`--tier2-bar` on `daily_job_search.py`, defaulting to 20/80/70.
+`load_config()` still fills in those defaults via `setdefault` if an existing
+profile happens to have a `tiers` block (backward compatible), but CLI flags
+always win over it.
 
 What stays in code as shared, generic logic (not personal, useful to any
 fork): `TITLE_REJECT`, `LANG_ACCEPT`/`LANG_REJECT`, `JD_REJECT`, and the base
@@ -65,10 +73,10 @@ these failure modes as synthetic regression cases (see docs/runbook.md for
 the reasoning behind each one).
 
 **Never inflate scores to fill the sheet.** The row target is configurable
-(`tiers.target_rows`), but some days genuinely yield only a handful of roles
-above the top bar. When fewer clear it, label the remainder Tier 2 (with the
-specific shortfall reason) and Tier 3 (not JD-verified) rather than promoting
-them. State the real count.
+per-run (`--target-rows`), but some days genuinely yield only a handful of
+roles above the top bar. When fewer clear it, label the remainder Tier 2
+(with the specific shortfall reason) and Tier 3 (not JD-verified) rather than
+promoting them. State the real count.
 
 **Never commit secrets or personal data.** `APIFY_TOKEN` and
 `ANTHROPIC_API_KEY` come from the environment locally and from repo secrets
@@ -79,4 +87,5 @@ way. This repo is public; anything committed here is public.
 
 The posting window, the score bar, and the target row count can't all be
 satisfied simultaneously — see docs/runbook.md for the detailed tradeoff and
-why `--window 48h` is the preferred lever over lowering the score bar.
+why `--window 48h` is the preferred lever over lowering the score bar (both
+now available as CLI flags: `--window`, `--tier1-bar`/`--tier2-bar`).

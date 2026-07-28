@@ -18,6 +18,17 @@ Usage:
     python daily_job_search.py --dry-run       # collect + filter, skip scoring (free)
     python daily_job_search.py --config path/to/profile.yaml
 
+Recency (--window) and match-percentage (--tier1-bar/--tier2-bar/--target-rows)
+are per-run knobs, not something baked into your profile -- they're meant to
+be tuned at the point you actually run the search, e.g. widening the window
+or lowering the bar on a slow day:
+
+    python daily_job_search.py --window 48h --tier2-bar 65
+    python daily_job_search.py --from-scored scored.json --target-rows 10
+
+Each defaults to whatever your profile's tiers block has (or 20/80/70 if it
+has none); passing the flag overrides it for that run only.
+
 Scoring without an Anthropic API key (uses your Claude subscription instead):
     A raw ANTHROPIC_API_KEY bills against the separate Developer Platform
     credit balance, not a Claude Pro/Max subscription -- those are different
@@ -459,6 +470,18 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--config", default=None, help="path to a profile YAML file")
     ap.add_argument(
+        "--target-rows", type=int, default=None,
+        help="override the profile's tiers.target_rows for this run",
+    )
+    ap.add_argument(
+        "--tier1-bar", type=int, default=None,
+        help="override the profile's tiers.tier1_bar for this run",
+    )
+    ap.add_argument(
+        "--tier2-bar", type=int, default=None,
+        help="override the profile's tiers.tier2_bar for this run",
+    )
+    ap.add_argument(
         "--emit-survivors", metavar="PATH",
         help="collect + hard-filter only, write survivor jobs as JSON to PATH, then exit "
              "(no ANTHROPIC_API_KEY needed -- score the file separately, see --from-scored)",
@@ -472,6 +495,14 @@ def main() -> int:
 
     cfg = load_config(args.config)
     tiers = cfg["tiers"]
+    # CLI flags win over whatever the profile has -- these are per-run knobs
+    # (like --window), not something the profile-generation Q&A should ask.
+    if args.target_rows is not None:
+        tiers["target_rows"] = args.target_rows
+    if args.tier1_bar is not None:
+        tiers["tier1_bar"] = args.tier1_bar
+    if args.tier2_bar is not None:
+        tiers["tier2_bar"] = args.tier2_bar
     stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
 
     if args.from_scored:

@@ -31,10 +31,10 @@ rubric: |
     location     (10) Berlin onsite/hybrid, or genuinely remote-EU
     ai_bonus     ( 5) AI/agentic tooling - bonus only, never a requirement
 
-tiers:
-  target_rows: 20   # how many rows the sheet aims for -- never inflate to hit this
-  tier1_bar: 80      # >= this score = genuine match
-  tier2_bar: 70      # >= this = worth a second look, labelled with the shortfall reason
+# Score bar / target row count are NOT set here -- they're per-run flags on
+# daily_job_search.py (--tier1-bar/--tier2-bar/--target-rows), tuned at the
+# point you run the search (e.g. lowering the bar on a slow day), not fixed
+# at profile creation. Defaults to 20/80/70 if you never pass them.
 
 search:
   keywords:

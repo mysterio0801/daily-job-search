@@ -68,9 +68,10 @@ cp config/profile.example.yaml config/profile.local.yaml
 ```
 
 Then edit it directly: your background (`profile`), your scoring rubric
-(`rubric`), score bar and target row count (`tiers`), search keywords and
-locations (`search`), and any referral contacts you want surfaced in the
-tracker (`referrals`).
+(`rubric`), search keywords and locations (`search`), and any referral
+contacts you want surfaced in the tracker (`referrals`). Score bar and target
+row count aren't part of the profile at all — see `--tier1-bar`/`--tier2-bar`/
+`--target-rows` below.
 
 Either way, `config/profile.local.yaml` is gitignored — it stays on your
 machine (or in your fork's GitHub secrets, see below) and never gets
@@ -83,6 +84,15 @@ export APIFY_TOKEN=...
 export ANTHROPIC_API_KEY=...
 python daily_job_search.py --dry-run   # collect + filter only, no API cost
 python daily_job_search.py             # full run, writes job-matches-YYYY-MM-DD.xlsx
+```
+
+Posting window and match bar are per-run flags, not profile settings — tune
+them at the point you actually run the search rather than baking in a fixed
+value (defaults: `24h` window, 20 rows, 80/70 bars):
+
+```bash
+python daily_job_search.py --window 48h --tier2-bar 65   # slow day: widen the pool, lower the bar
+python daily_job_search.py --from-scored scored.json --target-rows 10
 ```
 
 ## Scoring without a separate Anthropic API key

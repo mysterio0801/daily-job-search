@@ -1,9 +1,18 @@
 config/profile.local.yaml
 .env
-job-matches-*.xlsx
+job-matches-*
 run.log
 __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
 venv/
+
+# Pipeline intermediate files (real scraped job data / resume text / draft
+# profile content) -- default names suggested by the README and by
+# --emit-survivors/--emit-request. Never meant to be committed.
+survivors.json
+scored.json
+request.json
+artifacts/
+*.pdf
