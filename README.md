@@ -16,17 +16,43 @@ and it searches for you instead.
 git clone <your fork URL>
 cd daily-job-search
 pip install -r requirements.txt
+```
+
+Get an [Apify](https://apify.com) API token and an
+[Anthropic](https://console.anthropic.com) API key — you'll need both either
+way.
+
+Then build `config/profile.local.yaml`, either:
+
+**From your resume** (recommended — asks a few questions, has Claude draft the
+rest):
+
+```bash
+export ANTHROPIC_API_KEY=...
+python scripts/generate_profile.py --resume /path/to/your_resume.pdf
+```
+
+Answer the prompts (locations, company types wanted/excluded, search
+keywords, referral contacts). Review the generated file afterward — especially
+the rubric weights and the "Does NOT want" line, since those drive every
+filtering decision downstream.
+
+**Or by hand:**
+
+```bash
 cp config/profile.example.yaml config/profile.local.yaml
 ```
 
-Edit `config/profile.local.yaml`: your background (`profile`), your scoring
-rubric (`rubric`), score bar and target row count (`tiers`), search keywords
-and locations (`search`), and any referral contacts you want surfaced in the
-tracker (`referrals`). This file is gitignored — it stays on your machine (or
-in your fork's GitHub secrets/Actions, see below) and never gets committed.
+Then edit it directly: your background (`profile`), your scoring rubric
+(`rubric`), score bar and target row count (`tiers`), search keywords and
+locations (`search`), and any referral contacts you want surfaced in the
+tracker (`referrals`).
 
-Get an [Apify](https://apify.com) API token and an
-[Anthropic](https://console.anthropic.com) API key, then:
+Either way, `config/profile.local.yaml` is gitignored — it stays on your
+machine (or in your fork's GitHub secrets, see below) and never gets
+committed.
+
+Now run it:
 
 ```bash
 export APIFY_TOKEN=...
@@ -37,11 +63,16 @@ python daily_job_search.py             # full run, writes job-matches-YYYY-MM-DD
 
 ### Running on a schedule (GitHub Actions)
 
-1. Push your fork to GitHub.
-2. Add repo secrets (Settings → Secrets and variables → Actions): `APIFY_TOKEN`, `ANTHROPIC_API_KEY`.
-3. The workflow at `.github/workflows/daily-job-search.yml` runs weekdays at 07:00 IST by default — edit the `cron:` line for your own timezone (GitHub reads that file directly to schedule runs; it can't be driven from `profile.local.yaml`).
-4. **`config/profile.local.yaml` isn't in the repo** (it's gitignored, by design — it's your personal data). Either commit a private variant on a fork you keep private, or adapt the workflow to reconstruct it from a repo secret before the run. The example profile runs as a placeholder demo otherwise.
+1. Push your fork to GitHub. Note: GitHub only allows forks of a public repo to also be public (there's no private-fork option), so treat your fork as public too — anything you `git add` in it is world-readable.
+2. Add repo secrets (Settings → Secrets and variables → Actions → Secrets): `APIFY_TOKEN`, `ANTHROPIC_API_KEY`.
+3. `config/profile.local.yaml` is gitignored and never reaches the Actions runner on its own. Push its contents as a **third secret**, `PROFILE_YAML`, so the workflow can reconstitute the file before each run:
+   ```bash
+   gh secret set PROFILE_YAML < config/profile.local.yaml
+   ```
+   Without this secret the workflow silently falls back to the tracked example/demo profile — same behavior as running locally with no `profile.local.yaml`.
+4. The workflow runs weekdays at 07:00 IST by default — edit the `cron:` line in `.github/workflows/daily-job-search.yml` for your own timezone (GitHub reads that file directly to schedule runs; it can't be driven from `profile.local.yaml`).
 5. Trigger a manual run anytime via the Actions tab (`workflow_dispatch`) to test before waiting for the schedule.
+6. **If you ever edit `profile.local.yaml` locally** (rubric tweak, new referral), re-run the `gh secret set` command above — the secret is a snapshot, not a live link to the file.
 
 Optional email delivery of the tracker: set the repo variable
 `ENABLE_EMAIL_NOTIFY=true` plus secrets `MAIL_USERNAME`, `MAIL_APP_PASSWORD`
@@ -74,6 +105,7 @@ isn't legal advice.
 
 ```
 daily_job_search.py                     collect -> filter -> score -> xlsx
+scripts/generate_profile.py             resume + Q&A -> config/profile.local.yaml
 config/profile.example.yaml             tracked demo profile (fictional persona)
 config/profile.local.yaml               your real profile (gitignored, you create this)
 tests/test_filters.py                   hard-filter regression tests (synthetic JDs)

@@ -25,6 +25,21 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # config/profile.local.yaml is gitignored (it's personal data) so it never
+      # reaches this checkout. Store its contents as the PROFILE_YAML secret --
+      # e.g. `gh secret set PROFILE_YAML < config/profile.local.yaml` -- and this
+      # step reconstitutes the file before the run. Without the secret set, the
+      # pipeline falls back to the tracked example/demo profile, same as locally.
+      - name: Restore personal profile
+        env:
+          PROFILE_YAML: ${{ secrets.PROFILE_YAML }}
+        run: |
+          if [ -n "$PROFILE_YAML" ]; then
+            printf '%s' "$PROFILE_YAML" > config/profile.local.yaml
+          else
+            echo "PROFILE_YAML secret not set -- running with the example demo profile" >&2
+          fi
+
       - name: Run pipeline
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
