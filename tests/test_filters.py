@@ -83,7 +83,34 @@ def test_cpp_role_rejected_despite_generic_title():
     """
     j = job("Software Engineer", "Initech Networks", jd)
     reason = hard_filter(j, MAX_HOURS, NO_EXTRA_EXCLUDES)
-    assert reason == "no JVM language in description"
+    assert reason == "primary language is not JVM"
+
+
+def test_language_agnostic_jd_survives():
+    # Real case: a live Amazon SDE posting (2 hours old, otherwise a plausible
+    # backend fit) named no language at all -- neither a JVM term nor a
+    # reject-list language -- and was hard-rejected before scoring ever saw
+    # it. A JD silent on language isn't evidence *against* a JVM stack, so
+    # this should now reach scoring instead of being pre-filtered out.
+    jd = """
+    We're looking for a Software Development Engineer to join our team building
+    distributed, high-scale backend systems that power millions of transactions
+    daily. You'll own services end to end, from design through production
+    operations, working across a large-scale microservices architecture.
+
+    Basic Qualifications:
+    - 2+ years of professional software development experience
+    - Experience with distributed systems and object-oriented design
+    - Strong computer science fundamentals: data structures, algorithms, complexity
+    - Experience with high-throughput, low-latency production systems
+
+    Preferred Qualifications:
+    - Experience leading design reviews and mentoring other engineers
+    - Track record of shipping large-scale systems in an agile environment
+    """
+    j = job("Software Development Engineer", "Amazon", jd)
+    reason = hard_filter(j, MAX_HOURS, NO_EXTRA_EXCLUDES)
+    assert reason is None
 
 
 def test_overqualified_seniority_rejected():

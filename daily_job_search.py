@@ -135,8 +135,13 @@ COMPANY_REJECT = {
 # Language signals. A JD naming none of the ACCEPT terms, or naming a REJECT
 # term without any ACCEPT term, is not your stack.
 LANG_ACCEPT = re.compile(r"\b(java|kotlin|jvm|spring|ktor|scala)\b", re.I)
+# (?<!\w)/(?!\w) instead of \b: several alternatives end or start with
+# punctuation ("c++", ".net", "c#"), and "\b" never matches between two
+# non-word characters (e.g. the "+" in "c++" and a following space) -- so
+# "\bc\+\+\b" could never match "C++" at all. The lookaround forms work
+# whether the adjacent character is a letter or punctuation.
 LANG_REJECT = re.compile(
-    r"\b(c\+\+|\.net|c#|golang|\bgo\b|rust|php|ruby|rails|perl|cobol|pl/sql)\b", re.I
+    r"(?<!\w)(c\+\+|\.net|c#|golang|\bgo\b|rust|php|ruby|rails|perl|cobol|pl/sql)(?!\w)", re.I
 )
 
 # Discipline signals in the BODY. Necessary because a title filter cannot catch
@@ -202,8 +207,12 @@ def hard_filter(job: dict, max_hours: float, exclude_companies: set) -> str | No
         return "company excluded"
     if len(jd) < 400:
         return "description too thin to score"
-    if not LANG_ACCEPT.search(jd):
-        return "no JVM language in description"
+    # Only hard-reject on an EXPLICIT non-JVM commitment (a reject-list
+    # language named, with fewer than 2 JVM mentions to outweigh it) -- a JD
+    # naming neither is language-agnostic, not evidence against a JVM stack.
+    # Big-company JDs (Amazon, etc.) routinely never name a language at all
+    # even when the actual team is JVM-heavy; let scoring judge those on
+    # context instead of hard-excluding them before it ever sees them.
     if LANG_REJECT.search(jd) and len(LANG_ACCEPT.findall(jd)) < 2:
         return "primary language is not JVM"
     hits = JD_REJECT.findall(jd)
@@ -525,7 +534,18 @@ def main() -> int:
         print("ANTHROPIC_API_KEY is not set (or use --emit-survivors to score without one)", file=sys.stderr)
         return 1
 
-    window_map = {"24h": ("r86400", 24.0), "48h": ("r172800", 48.0), "72h": ("r259200", 72.0)}
+    # The Apify actor's publishedAt only accepts these exact enum values
+    # ("", r86400=24h, r604800=7d, r2592000=30d) -- there's no server-side
+    # 48h/72h option. hard_filter()'s own posted_hours_ago() check is what
+    # actually enforces the precise window client-side, so 48h/72h just ask
+    # Apify for the next-broadest bucket (7 days) and let that check narrow
+    # it down -- this pulls (and pays for) more raw results than a true 48h/
+    # 72h server-side filter would, but there's no tighter option available.
+    window_map = {
+        "24h": ("r86400", 24.0),
+        "48h": ("r604800", 48.0),
+        "72h": ("r604800", 72.0),
+    }
     apify_window, max_hours = window_map[args.window]
 
     jobs = collect(apify_token, apify_window, cfg["search"])

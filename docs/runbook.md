@@ -23,6 +23,13 @@ Each of these cost a failed or wasted run to discover:
 - An unrestricted, country-wide pass tends to be low-yield (a large batch of
   results, very few usable). Restricting one pass to `workType: ["remote"]` and
   another to a specific city works better than one wide pass.
+- `publishedAt` only accepts an exact enum: `""` (any time), `r86400` (24h),
+  `r604800` (7 days), `r2592000` (30 days) — nothing in between. There's no
+  server-side "48h" or "72h" option; sending an arbitrary seconds value 400s
+  outright. `--window 48h`/`72h` work by asking Apify for the 7-day bucket and
+  letting `hard_filter()`'s own `posted_hours_ago()` check narrow it down
+  client-side — which means those windows fetch (and pay for) more raw
+  results than a true 48h/72h server-side filter would.
 
 ## The 24h / bar / row-count tension
 
@@ -53,6 +60,16 @@ enough — description-level discipline detection (Jetpack Compose, Android SDK,
 SwiftUI, etc.) is what actually catches these. `tests/test_filters.py` encodes
 this and other cases as regression tests; if you touch the filters, keep it
 green.
+
+**A JD that names no language isn't evidence against your stack.** `hard_filter()`
+only hard-rejects on language when a JD *explicitly commits* to a competing
+language (`LANG_REJECT` hits with fewer than 2 `LANG_ACCEPT` mentions) — a JD
+naming neither passes through to scoring instead. This matters in practice:
+large companies (Amazon is the real example that surfaced it) routinely write
+language-agnostic JDs even for JVM-heavy teams — "2+ years of professional
+software development experience," CS fundamentals, no language named at all.
+An earlier version hard-rejected any JD not explicitly naming Java/Kotlin,
+which silently dropped these before scoring ever saw them.
 
 **Never commit secrets.** `APIFY_TOKEN` and `ANTHROPIC_API_KEY` come from the
 environment locally and from repo secrets in CI. `config/profile.local.yaml`
